@@ -1,9 +1,12 @@
 package com.pause.backend;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
-import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -47,6 +50,19 @@ public class PaymentRecord {
     @Column(length = 2000)
     private String summary;
 
+    // The checkpoint decision: ALLOW, HOLD, or BLOCK. Stored as text in the DB.
+    // @Enumerated(STRING) stores "ALLOW"/"HOLD"/"BLOCK" instead of an integer ordinal.
+    @Enumerated(EnumType.STRING)
+    private Decision decision;
+
+    // One-time trusted-contact token. @JsonIgnore means it NEVER appears in any JSON response.
+    @JsonIgnore
+    private String trustedToken;
+
+    // Expiry for the trusted-contact token. Also hidden from all JSON responses.
+    @JsonIgnore
+    private LocalDateTime trustedTokenExpiresAt;
+
     // No-args constructor required by JPA and JSON serialization.
     public PaymentRecord() {}
 
@@ -80,4 +96,17 @@ public class PaymentRecord {
 
     public String getSummary() { return summary; }
     public void setSummary(String summary) { this.summary = summary; }
+
+    public Decision getDecision() { return decision; }
+    public void setDecision(Decision decision) { this.decision = decision; }
+
+    // Getters/setters for token fields — used internally; @JsonIgnore on the fields
+    // ensures they are excluded from all serialized responses.
+    public String getTrustedToken() { return trustedToken; }
+    public void setTrustedToken(String trustedToken) { this.trustedToken = trustedToken; }
+
+    public LocalDateTime getTrustedTokenExpiresAt() { return trustedTokenExpiresAt; }
+    public void setTrustedTokenExpiresAt(LocalDateTime trustedTokenExpiresAt) {
+        this.trustedTokenExpiresAt = trustedTokenExpiresAt;
+    }
 }

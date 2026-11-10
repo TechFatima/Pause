@@ -80,33 +80,6 @@ public class PayPalTestController {
     }
 
     // -----------------------------------------------------------------------
-    // Step 2: Buyer redirect landing pages
-    // -----------------------------------------------------------------------
-
-    /**
-     * GET /paypal/return?token=ORDER_ID
-     * PayPal redirects the buyer here after they approve.
-     * "token" is PayPal's query parameter name for the order id.
-     *
-     * Spring concept - @RequestParam: same as above, reads ?token=... from the URL.
-     */
-    @GetMapping("/paypal/return")
-    public String paypalReturn(@RequestParam(required = false) String token) {
-        // Plain text response — no JSON needed for a landing page.
-        return "Payment approved! Order ID: " + token
-                + "\n\nNext step: open /paypal/orders/" + token + "/authorize";
-    }
-
-    /**
-     * GET /paypal/cancel?token=ORDER_ID
-     * PayPal redirects the buyer here if they cancel.
-     */
-    @GetMapping("/paypal/cancel")
-    public String paypalCancel(@RequestParam(required = false) String token) {
-        return "Payment cancelled. Order ID: " + token;
-    }
-
-    // -----------------------------------------------------------------------
     // Step 3: Authorize (place the hold)
     // -----------------------------------------------------------------------
 
@@ -194,7 +167,7 @@ public class PayPalTestController {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                         "error",  "Unexpected error",
-                        "detail", ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage()
+                        "detail", "The request could not be completed. Please try again."
                 ));
     }
 }

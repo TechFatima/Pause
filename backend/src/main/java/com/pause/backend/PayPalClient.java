@@ -1,9 +1,11 @@
 package com.pause.backend;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.Base64;
@@ -32,14 +34,30 @@ public class PayPalClient {
      *
      * Spring concept - @Value: reads a named property and injects its value.
      */
-    public PayPalClient(
-            @Value("${paypal.client-id}") String clientId,
-            @Value("${paypal.secret}")    String secret
-    ) {
-        this.clientId = clientId;
-        this.secret   = secret;
+    // Base URL for PayPal's return/cancel redirects; read from application.properties.
+    private final String callbackBaseUrl;
 
-        this.restClient = RestClient.builder()
+    @Autowired
+    public PayPalClient(
+            @Value("${paypal.client-id}")           String clientId,
+            @Value("${paypal.secret}")              String secret,
+            @Value("${paypal.callback-base-url}")   String callbackBaseUrl
+    ) {
+        this(clientId, secret, callbackBaseUrl, RestClient.builder());
+    }
+
+    // Test constructor: lets tests connect RestClient to a local mock server.
+    PayPalClient(
+            String clientId,
+            String secret,
+            String callbackBaseUrl,
+            RestClient.Builder restClientBuilder
+    ) {
+        this.clientId        = clientId;
+        this.secret          = secret;
+        this.callbackBaseUrl = callbackBaseUrl;
+
+        this.restClient = restClientBuilder
                 .baseUrl(BASE_URL)
                 .build();
     }
@@ -53,6 +71,31 @@ public class PayPalClient {
 
     /** Result of authorizeOrder: the authorization id and its status. */
     record AuthorizationResult(String authorizationId, String status) {}
+
+    /**
+     * Result of getOrderDetails: the PayPal order status and any existing authorization.
+     * existingAuthorizationId / existingAuthorizationStatus are null if no authorization exists.
+     */
+    record OrderDetails(
+            String orderStatus,
+            String existingAuthorizationId,
+            String existingAuthorizationStatus,
+            String existingCaptureStatus,
+            boolean authorizationStateKnown
+    ) {
+        OrderDetails(String orderStatus, String authorizationId, String authorizationStatus) {
+            this(orderStatus, authorizationId, authorizationStatus, null, true);
+        }
+
+        OrderDetails(
+                String orderStatus,
+                String authorizationId,
+                String authorizationStatus,
+                String captureStatus
+        ) {
+            this(orderStatus, authorizationId, authorizationStatus, captureStatus, true);
+        }
+    }
 
     // -----------------------------------------------------------------------
     // Public API
@@ -86,6 +129,12 @@ public class PayPalClient {
             return (String) response.get("access_token"); // never log this value
         } catch (RestClientResponseException ex) {
             throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
         }
     }
 
@@ -106,8 +155,8 @@ public class PayPalClient {
                   "payment_source": {
                     "paypal": {
                       "experience_context": {
-                        "return_url": "http://localhost:8080/paypal/return",
-                        "cancel_url": "http://localhost:8080/paypal/cancel"
+                        "return_url": "%s/paypal/return",
+                        "cancel_url": "%s/paypal/cancel"
                       }
                     }
                   },
@@ -120,7 +169,7 @@ public class PayPalClient {
                     }
                   ]
                 }
-                """.formatted(amount);
+                """.formatted(callbackBaseUrl, callbackBaseUrl, amount);
 
         try {
             @SuppressWarnings("unchecked")
@@ -147,6 +196,12 @@ public class PayPalClient {
             );
         } catch (RestClientResponseException ex) {
             throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
         }
     }
 
@@ -182,15 +237,24 @@ public class PayPalClient {
             return new AuthorizationResult(authId, authStatus);
         } catch (RestClientResponseException ex) {
             throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
         }
     }
 
     /**
      * Captures (charges) a previously created authorization.
+     * Only returns the status string when PayPal explicitly confirms a value.
+     * Throws PayPalClientException if the response is missing or status is absent,
+     * so callers never assume COMPLETED without explicit confirmation.
      *
      * @param authId the authorization id returned by authorizeOrder
-     * @return the resulting status string, e.g. "COMPLETED"
-     * @throws PayPalClientException if PayPal returns an error.
+     * @return the status string returned by PayPal, e.g. "COMPLETED"
+     * @throws PayPalClientException if PayPal returns an error or status is unconfirmed.
      */
     public String captureAuthorization(String authId) {
         String token = getAccessToken();
@@ -205,12 +269,106 @@ public class PayPalClient {
                     .retrieve()
                     .body(Map.class);
 
+            // Never assume COMPLETED — require PayPal to confirm the status explicitly.
             if (response == null) {
-                return "COMPLETED"; // PayPal occasionally returns 204 on capture
+                throw new PayPalClientException(500,
+                        "Capture API returned no response body — status unconfirmed.");
             }
-            return (String) response.getOrDefault("status", "COMPLETED");
+            String capturedStatus = (String) response.get("status");
+            if (capturedStatus == null) {
+                throw new PayPalClientException(500,
+                        "Capture API response missing status field — status unconfirmed.");
+            }
+            return capturedStatus;
         } catch (RestClientResponseException ex) {
             throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        }
+    }
+
+    /**
+     * Retrieves the current state of a PayPal order. READ-ONLY — no side effects.
+     * Used to safely inspect PayPal state before retrying failed operations.
+     *
+     * @param orderId the PayPal order id
+     * @return OrderDetails with the order status and any existing authorization (nullable fields).
+     * @throws PayPalClientException if PayPal returns an error or the order is not found.
+     */
+    public OrderDetails getOrderDetails(String orderId) {
+        String token = getAccessToken();
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restClient.get()
+                    .uri("/v2/checkout/orders/{id}", orderId)
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(Map.class);
+
+            if (response == null) {
+                throw new PayPalClientException(500, "Empty response from PayPal get-order API.");
+            }
+
+            String orderStatus = (String) response.get("status");
+
+            // Extract any existing authorization from purchase_units[0].payments.authorizations[0]
+            String existingAuthId     = null;
+            String existingAuthStatus = null;
+            String existingCaptureStatus = null;
+            boolean authorizationStateKnown = true;
+            try {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> units =
+                        (List<Map<String, Object>>) response.get("purchase_units");
+                if (units == null || units.isEmpty()) {
+                    authorizationStateKnown = false;
+                } else {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> payments =
+                            (Map<String, Object>) units.get(0).get("payments");
+                    if (payments != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> auths =
+                                (List<Map<String, Object>>) payments.get("authorizations");
+                        if (auths != null && !auths.isEmpty()) {
+                            existingAuthId     = (String) auths.get(0).get("id");
+                            existingAuthStatus = (String) auths.get(0).get("status");
+                            if (existingAuthId == null || existingAuthStatus == null) {
+                                authorizationStateKnown = false;
+                            }
+                        }
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> captures =
+                                (List<Map<String, Object>>) payments.get("captures");
+                        if (captures != null && captures.size() == 1) {
+                            existingCaptureStatus = (String) captures.get(0).get("status");
+                            if (existingCaptureStatus == null) authorizationStateKnown = false;
+                        } else if (captures != null && captures.size() > 1) {
+                            authorizationStateKnown = false;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Parsing failed — report that the payment state is unknown.
+                authorizationStateKnown = false;
+            }
+
+            return new OrderDetails(
+                    orderStatus, existingAuthId, existingAuthStatus, existingCaptureStatus,
+                    authorizationStateKnown);
+        } catch (RestClientResponseException ex) {
+            throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
         }
     }
 
@@ -238,6 +396,12 @@ public class PayPalClient {
             return "VOIDED";
         } catch (RestClientResponseException ex) {
             throw new PayPalClientException(ex.getStatusCode().value(), safeErrorMessage(ex));
+        } catch (RestClientException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
+        } catch (PayPalClientException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new PayPalClientException(502, safeErrorMessage(null));
         }
     }
 
@@ -297,8 +461,8 @@ public class PayPalClient {
      * Never includes credentials, tokens, or Authorization headers.
      */
     private String safeErrorMessage(RestClientResponseException ex) {
-        String body = ex.getResponseBodyAsString();
-        return body.isBlank() ? ex.getMessage() : body;
+        // PayPal error bodies can contain sensitive details; never return them to callers.
+        return "PayPal could not complete the request. Please try again.";
     }
 
     // -----------------------------------------------------------------------
