@@ -3,6 +3,7 @@ package com.pause.backend;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +42,11 @@ public class PaymentRecord {
     // PayPal authorization id — set when the order is authorized. Nullable.
     private String authorizationId;
 
+    // Human-readable checkpoint summary: personalized message + reasons. Nullable.
+    // @Column(length=2000) tells JPA to create a VARCHAR(2000) column instead of the default 255.
+    @Column(length = 2000)
+    private String summary;
+
     // No-args constructor required by JPA and JSON serialization.
     public PaymentRecord() {}
 
@@ -71,4 +77,7 @@ public class PaymentRecord {
 
     public String getAuthorizationId() { return authorizationId; }
     public void setAuthorizationId(String authorizationId) { this.authorizationId = authorizationId; }
+
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
 }
