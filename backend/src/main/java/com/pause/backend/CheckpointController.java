@@ -3,6 +3,7 @@ package com.pause.backend;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,9 +23,11 @@ import java.util.stream.Collectors;
 public class CheckpointController {
 
     private final CheckpointService checkpointService;
+    private final UserIdentityService userIdentityService;
 
-    public CheckpointController(CheckpointService checkpointService) {
+    public CheckpointController(CheckpointService checkpointService, UserIdentityService userIdentityService) {
         this.checkpointService = checkpointService;
+        this.userIdentityService = userIdentityService;
     }
 
     /**
@@ -38,17 +41,20 @@ public class CheckpointController {
      * into a CheckpointRequest object automatically.
      */
     @PostMapping("/checkpoint")
-    public ResponseEntity<?> checkpoint(@Valid @RequestBody CheckpointRequest request) {
+    public ResponseEntity<?> checkpoint(
+            @Valid @RequestBody CheckpointRequest request,
+            Authentication authentication
+    ) {
         try {
-            CheckpointResult result = checkpointService.evaluate(request);
+            Long userId = userIdentityService.requireUser(authentication).getId();
+            CheckpointResult result = checkpointService.evaluate(request, userId);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", ex.getMessage()));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Unexpected error: " +
-                            (ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage())));
+                    .body(Map.of("error", "The checkpoint could not be completed. Please try again."));
         }
     }
 

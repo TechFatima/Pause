@@ -55,6 +55,10 @@ public class PaymentRecord {
     @Enumerated(EnumType.STRING)
     private Decision decision;
 
+    private Integer riskScore;
+
+    private boolean aiUsed;
+
     // One-time trusted-contact token. @JsonIgnore means it NEVER appears in any JSON response.
     @JsonIgnore
     private String trustedToken;
@@ -99,6 +103,12 @@ public class PaymentRecord {
 
     public Decision getDecision() { return decision; }
     public void setDecision(Decision decision) { this.decision = decision; }
+
+    public Integer getRiskScore() { return riskScore; }
+    public void setRiskScore(Integer riskScore) { this.riskScore = riskScore; }
+
+    public boolean isAiUsed() { return aiUsed; }
+    public void setAiUsed(boolean aiUsed) { this.aiUsed = aiUsed; }
 
     // Getters/setters for token fields — used internally; @JsonIgnore on the fields
     // ensures they are excluded from all serialized responses.

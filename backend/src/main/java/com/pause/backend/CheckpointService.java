@@ -19,9 +19,6 @@ public class CheckpointService {
     private static final int HOLD_THRESHOLD  = 40;
     private static final int BLOCK_THRESHOLD = 90;
 
-    // Demo user id — hardcoded for now; a real app would take it from the session.
-    private static final Long DEMO_USER_ID = 1L;
-
     private final RuleEngine              ruleEngine;
     private final InvestigationService    investigationService;
     private final PaymentRecordRepository paymentRepo;
@@ -43,7 +40,7 @@ public class CheckpointService {
      * Runs both engines, merges results, saves a record, and returns CheckpointResult.
      * Input validation is handled by @Valid on the controller; no null-checks needed here.
      */
-    public CheckpointResult evaluate(CheckpointRequest req) {
+    public CheckpointResult evaluate(CheckpointRequest req, Long userId) {
 
         // --- 1. Build timestamp ---
         LocalDateTime timestamp = LocalDateTime.now();
@@ -53,7 +50,7 @@ public class CheckpointService {
 
         // --- 2. Run rule engine ---
         RiskAssessment ruleResult = ruleEngine.evaluate(
-                DEMO_USER_ID,
+                userId,
                 req.getPayee(),
                 req.getAmount(),
                 timestamp
@@ -112,6 +109,9 @@ public class CheckpointService {
         // --- 10. Build summary string (message + reasons joined) for storage ---
         // Truncate to 2000 chars to respect the DB column limit.
         StringBuilder summaryBuilder = new StringBuilder(message);
+        if (analystResult.isAvailable()) {
+            summaryBuilder.append(" | AI explanation: ").append(analystResult.getExplanation());
+        }
         for (String r : reasons) {
             summaryBuilder.append(" | ").append(r);
         }
@@ -125,11 +125,14 @@ public class CheckpointService {
         String status = "DECIDED_" + decision.name(); // e.g. "DECIDED_HOLD"
 
         PaymentRecord record = new PaymentRecord();
-        record.setUserId(DEMO_USER_ID);
+        record.setUserId(userId);
         record.setPayeeName(req.getPayee());
         record.setAmount(req.getAmount());
         record.setCreatedAt(LocalDateTime.now());
         record.setStatus(status);
+        record.setDecision(decision);
+        record.setRiskScore(combinedScore);
+        record.setAiUsed(analystResult.isAvailable());
         record.setSummary(summary);
         record = paymentRepo.save(record);
 

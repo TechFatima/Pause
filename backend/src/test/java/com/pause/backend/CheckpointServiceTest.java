@@ -10,11 +10,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.security.test.context.support.WithMockUser;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -30,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(webEnvironment = WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "llm.api-key=")
+@WithMockUser(username = "rose@demo.pause.local")
 class CheckpointServiceTest {
 
     @Autowired
@@ -50,7 +53,7 @@ class CheckpointServiceTest {
         req.setMessage("Your pharmacy order is ready.");
         req.setHour(12);
 
-        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint")
+        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -81,7 +84,7 @@ class CheckpointServiceTest {
                 + "to the safe account at http://paypa1-secure.xyz/verify, "
                 + "don't tell anyone.");
 
-        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint")
+        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -108,7 +111,7 @@ class CheckpointServiceTest {
         req.setHour(12);
         req.setMessage("move it to the safe account");
 
-        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint")
+        MvcResult mvcResult = mockMvc.perform(post("/api/checkpoint").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -132,7 +135,7 @@ class CheckpointServiceTest {
         badAmount.setPayee("Grocery Store");
         badAmount.setAmount(new BigDecimal("-5.00"));
 
-        MvcResult r1 = mockMvc.perform(post("/api/checkpoint")
+        MvcResult r1 = mockMvc.perform(post("/api/checkpoint").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(badAmount)))
                 .andExpect(status().isBadRequest())
@@ -147,7 +150,7 @@ class CheckpointServiceTest {
         blankPayee.setPayee("   ");
         blankPayee.setAmount(new BigDecimal("30.00"));
 
-        MvcResult r2 = mockMvc.perform(post("/api/checkpoint")
+        MvcResult r2 = mockMvc.perform(post("/api/checkpoint").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(blankPayee)))
                 .andExpect(status().isBadRequest())

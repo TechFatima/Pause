@@ -51,6 +51,9 @@ public class DemoDataSeeder implements CommandLineRunner {
         // -----------------------------------------------------------------------
         AppUser rose = new AppUser();
         rose.setName("Rose");
+        rose.setEmail("rose@demo.pause.local");
+        // The seeded example account has no login password.
+        rose.setPasswordHash(null);
         rose.setMaxPerPayment(new BigDecimal("200.00"));
         rose.setWeeklyCap(new BigDecimal("500.00"));
         rose.setNewPayeesNeedApproval(true);

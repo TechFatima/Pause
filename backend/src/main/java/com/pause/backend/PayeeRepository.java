@@ -15,4 +15,5 @@ public interface PayeeRepository extends JpaRepository<Payee, Long> {
      * "SELECT * FROM payee WHERE user_id = ?". No SQL or implementation needed.
      */
     List<Payee> findByUserId(Long userId);
+    long countByUserId(Long userId);
 }

@@ -15,5 +15,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
  *   Long     — the type of AppUser's primary key (@Id field)
  */
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
-    // No extra methods needed for now. JpaRepository already gives us everything.
+    java.util.Optional<AppUser> findByEmailIgnoreCase(String email);
 }

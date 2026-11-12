@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -21,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -33,11 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(webEnvironment = WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "llm.api-key=")
+@WithMockUser(username = "rose@demo.pause.local")
 class PaymentFlowTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private PaymentRecordRepository paymentRepo;
+    @Autowired private UserNotificationRepository notificationRepo;
 
     // Replace PayPalClient with a mock — all tests share this mock.
     @MockitoBean
@@ -56,7 +60,7 @@ class PaymentFlowTest {
         req.setHour(hour);
         req.setMessage(message);
 
-        MvcResult result = mockMvc.perform(post("/api/payments/initiate")
+        MvcResult result = mockMvc.perform(post("/api/payments/initiate").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -114,6 +118,9 @@ class PaymentFlowTest {
         PaymentRecord record = paymentRepo.findById(recordId).orElseThrow();
         assertEquals("BLOCKED", record.getStatus());
         assertEquals(Decision.BLOCK, record.getDecision());
+        assertTrue(notificationRepo.findByUserIdOrderByCreatedAtDesc(record.getUserId()).stream()
+                .anyMatch(notification -> record.getId().equals(notification.getPaymentRecordId())
+                        && "PAYMENT_BLOCKED".equals(notification.getType())));
     }
 
     // -----------------------------------------------------------------------
@@ -594,11 +601,11 @@ class PaymentFlowTest {
         String token = record.getTrustedToken();
         when(payPalClient.captureAuthorization(authId)).thenReturn("COMPLETED");
 
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isNotFound());
@@ -618,7 +625,7 @@ class PaymentFlowTest {
         doReturn(new PayPalClient.OrderDetails("COMPLETED", authId, "CAPTURED", "COMPLETED"))
                 .when(payPalClient).getOrderDetails(orderId);
 
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isConflict());
@@ -641,11 +648,11 @@ class PaymentFlowTest {
                 .when(payPalClient).getOrderDetails(orderId);
         when(payPalClient.voidAuthorization(authId)).thenReturn("VOIDED");
 
-        mockMvc.perform(post("/api/trusted-contact/block")
+        mockMvc.perform(post("/api/trusted-contact/block").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isNotFound());
@@ -666,7 +673,7 @@ class PaymentFlowTest {
         record.setTrustedTokenExpiresAt(java.time.LocalDateTime.now().minusMinutes(1));
         paymentRepo.save(record);
 
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isGone());
@@ -687,7 +694,7 @@ class PaymentFlowTest {
         when(payPalClient.getOrderDetails(orderId))
                 .thenThrow(new PayPalClient.PayPalClientException(502, "safe error"));
 
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isServiceUnavailable());
@@ -712,11 +719,11 @@ class PaymentFlowTest {
         when(payPalClient.captureAuthorization(authId))
                 .thenThrow(new PayPalClient.PayPalClientException(502, "safe error"));
 
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isBadGateway());
-        mockMvc.perform(post("/api/trusted-contact/approve")
+        mockMvc.perform(post("/api/trusted-contact/approve").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(trustedRequest(token))))
                 .andExpect(status().isNotFound());

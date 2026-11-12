@@ -24,15 +24,18 @@ public class PaymentFlowService {
     private final CheckpointService checkpointService;
     private final PayPalClient payPalClient;
     private final PaymentRecordRepository paymentRepo;
+    private final NotificationService notificationService;
 
     public PaymentFlowService(
             CheckpointService checkpointService,
             PayPalClient payPalClient,
-            PaymentRecordRepository paymentRepo
+            PaymentRecordRepository paymentRepo,
+            NotificationService notificationService
     ) {
         this.checkpointService = checkpointService;
         this.payPalClient = payPalClient;
         this.paymentRepo = paymentRepo;
+        this.notificationService = notificationService;
     }
 
     enum ReturnOutcome {
@@ -43,16 +46,20 @@ public class PaymentFlowService {
         APPROVED, BLOCKED, NOT_FOUND, EXPIRED, ALREADY_PROCESSED, STATE_UNKNOWN, PAYPAL_ERROR
     }
 
-    public InitiatePaymentResponse initiate(CheckpointRequest req) {
-        CheckpointResult checkpoint = checkpointService.evaluate(req);
+    public InitiatePaymentResponse initiate(CheckpointRequest req, Long userId) {
+        CheckpointResult checkpoint = checkpointService.evaluate(req, userId);
         Decision decision = checkpoint.getDecision();
         PaymentRecord record = paymentRepo.findById(checkpoint.getPaymentRecordId())
                 .orElseThrow(() -> new IllegalStateException("Record not found after checkpoint save"));
         record.setDecision(decision);
+        notificationService.createOnce(userId, record.getId(), "PAYMENT_ASSESSED",
+                "Payment safety check complete", checkpoint.getMessage());
 
         if (decision == Decision.BLOCK) {
             record.setStatus("BLOCKED");
             paymentRepo.save(record);
+            notificationService.createOnce(userId, record.getId(), "PAYMENT_BLOCKED",
+                    "Payment blocked", "Pause blocked a payment before creating a PayPal order.");
             return new InitiatePaymentResponse(
                     record.getId(), decision, checkpoint.getMessage(), checkpoint.getReasons(), null);
         }
@@ -214,6 +221,8 @@ public class PaymentFlowService {
             if (record.getDecision() == Decision.ALLOW) {
                 record.setStatus("COMPLETED");
                 paymentRepo.save(record);
+                notifyPayment(record, "PAYMENT_COMPLETED", "Payment completed",
+                        "PayPal confirmed that this payment was captured.");
                 return ReturnOutcome.COMPLETED;
             }
             record.setStatus("PAYPAL_ERROR");
@@ -264,6 +273,8 @@ public class PaymentFlowService {
                 if ("COMPLETED".equals(captureStatus)) {
                     record.setStatus("COMPLETED");
                     paymentRepo.save(record);
+                    notifyPayment(record, "PAYMENT_COMPLETED", "Payment completed",
+                            "PayPal confirmed that this payment was captured.");
                     return ReturnOutcome.COMPLETED;
                 }
             } catch (RuntimeException ignored) {
@@ -277,6 +288,8 @@ public class PaymentFlowService {
         createTrustedToken(record);
         record.setStatus("HELD");
         paymentRepo.save(record);
+        notifyPayment(record, "PAYMENT_HELD", "Payment held for review",
+                "This payment is authorized but has not been captured. Trusted-contact delivery is not configured.");
         return ReturnOutcome.HELD;
     }
 
@@ -336,6 +349,8 @@ public class PaymentFlowService {
             if ("COMPLETED".equals(status)) {
                 record.setStatus("COMPLETED");
                 paymentRepo.save(record);
+                notifyPayment(record, "TRUSTED_CONTACT_APPROVED", "Trusted contact approved payment",
+                        "The payment was captured after a trusted-contact approval.");
                 return TrustedContactOutcome.APPROVED;
             }
         } catch (RuntimeException ignored) {
@@ -346,6 +361,8 @@ public class PaymentFlowService {
         if (afterCapture != null && isCaptured(afterCapture)) {
             record.setStatus("COMPLETED");
             paymentRepo.save(record);
+            notifyPayment(record, "TRUSTED_CONTACT_APPROVED", "Trusted contact approved payment",
+                    "PayPal confirmed capture after a trusted-contact approval.");
             return TrustedContactOutcome.APPROVED;
         }
         record.setStatus("CONTACT_ACTION_UNCERTAIN");
@@ -364,6 +381,8 @@ public class PaymentFlowService {
         if (afterVoid != null && isVoided(afterVoid)) {
             record.setStatus("BLOCKED");
             paymentRepo.save(record);
+            notifyPayment(record, "TRUSTED_CONTACT_BLOCKED", "Trusted contact blocked payment",
+                    "The authorization was voided after a trusted-contact block.");
             return TrustedContactOutcome.BLOCKED;
         }
         record.setStatus("CONTACT_ACTION_UNCERTAIN");
@@ -396,7 +415,13 @@ public class PaymentFlowService {
     private ReturnOutcome markCancelled(PaymentRecord record) {
         record.setStatus("CANCELLED");
         paymentRepo.save(record);
+        notifyPayment(record, "PAYMENT_CANCELLED", "Payment cancelled",
+                "PayPal confirmed this payment was cancelled.");
         return ReturnOutcome.CANCELLED;
+    }
+
+    private void notifyPayment(PaymentRecord record, String event, String title, String message) {
+        notificationService.createOnce(record.getUserId(), record.getId(), event, title, message);
     }
 
     private ReturnOutcome markAuthFailed(PaymentRecord record) {

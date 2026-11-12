@@ -1,9 +1,11 @@
 package com.pause.backend;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import java.math.BigDecimal;
 
 /**
@@ -24,6 +26,13 @@ public class AppUser {
     private Long id;
 
     private String name;
+
+    @Column(nullable = false, unique = true, length = 254)
+    private String email;
+
+    @JsonIgnore
+    @Column(length = 500)
+    private String passwordHash;
 
     // Maximum amount allowed for a single payment (in USD).
     private BigDecimal maxPerPayment;
@@ -53,6 +62,12 @@ public class AppUser {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
     public BigDecimal getMaxPerPayment() { return maxPerPayment; }
     public void setMaxPerPayment(BigDecimal maxPerPayment) { this.maxPerPayment = maxPerPayment; }

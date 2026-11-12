@@ -5,8 +5,9 @@
 - Done: Steps 1–6.
 - Done: Step 8 backend payment flow, trusted-contact actions, and PayPal test-route restriction.
 - Done: Step 9 optional Vultr analyst.
-- Not started: Step 10 (frontend), Step 11 (README, license, demo video).
-- Latest full test run: `mvn -q test` from `backend` on 2026-11-12; 54 tests, 0 failures, 0 errors, 0 skipped.
+- Done: User-centred platform foundation (registration/login, private dashboard data, notifications, and frontend integration).
+- Not implemented: verified PayPal webhooks, external trusted-contact delivery, README/license/demo video.
+- Latest full test run: `mvn -q test` from `backend` on 2026-11-13; 58 tests, 0 failures, 0 errors, 0 skipped.
 - The full suite uses automated tests and mocks; it does not make live PayPal payments. A separate manual Vultr check was previously reported working, including an app response with `aiUsed: true`.
 
 ## Step 8: PayPal payment checkpoint
@@ -91,3 +92,43 @@
 - Vultr analysis is optional and advisory; deterministic checks always remain in control of the final severity.
 - Do not change `pom.xml` starter names; the Spring Boot 4 starter names are intentional.
 - Keep secrets in local ignored configuration or environment variables. Never read, print, or commit local secrets.
+- New accounts receive conservative demo limits (200 per payment, 500 weekly, new payees require approval); the seeded Rose account has no password and is not a login account.
+
+## User-centred platform work
+
+### Accounts and access control
+
+- Registration is `POST /api/auth/register`; login is `POST /api/auth/login`; the signed-in profile is `GET /api/auth/me`; logout is `POST /api/auth/logout`.
+- Passwords are stored as PBKDF2 hashes. The browser uses a server-side Spring Security session, and login rotates the session ID. State-changing requests require a session CSRF token.
+- Account-specific payment initiation, history, payee count, and notifications resolve the signed-in email to that account's database ID. They do not use the former globally shared user ID.
+- The old Rose demo account retains its seeded payment history for the demo but has no password hash, so it cannot be logged into as a shared default account. New users start with their own records and no fabricated history.
+- Anonymous payment/dashboard APIs return 401. The public PayPal return/cancel callbacks and trusted-contact capability-token actions remain public by design; the one-time token is the authority for the trusted-contact action.
+
+### Payment activity and notifications
+
+- The dashboard reads its profile from `/api/auth/me`, payment activity from `/api/payments`, and notifications from `/api/notifications`.
+- Payment activity uses a safe DTO rather than serializing PayPal order/authorization identifiers or trusted-contact tokens.
+- Real payment initiation creates a deduplicated assessment notification; BLOCK creates a blocked notification. Verified cancellation, capture, hold, and trusted-contact approve/block outcomes create notifications from their actual application events.
+- Notifications are scoped by user ID, include timestamps and read state, and can be marked read with `POST /api/notifications/{id}/read`. A database unique event key prevents duplicate notifications for the same payment event.
+- The database currently uses the existing in-memory H2 setup with `ddl-auto=create-drop`. Notification rows are persisted while that database is running, but are lost when the application restarts; production-style durable storage is not configured.
+
+### Frontend integration
+
+- The existing static HTML/CSS/vanilla JavaScript is served at `/`. It now includes account registration/sign-in, logout, account limits, payment activity, pending-review count, notifications/read state, and the existing checkpoint form and decision details.
+- The browser uses relative API paths, session cookies, and CSRF headers. Backend-provided text is inserted with `textContent` or DOM nodes rather than untrusted HTML.
+- Empty activity/notification states are based on API results; the UI does not fabricate sample notifications or transaction history. The preset buttons only fill the payment form.
+- HOLD messaging explicitly says authorization is not capture and no trusted contact has been notified. ALLOW/HOLD buyer approval links remain PayPal Sandbox links; BLOCK has no approval action.
+
+### PayPal external event limitations
+
+- No webhook endpoint was added because the project does not have a registered PayPal webhook ID, a deployed public HTTPS listener, or a configured event subscription. The current localhost callback is a browser redirect for payments initiated by this application, not a general feed of external PayPal payments.
+- Relevant Checkout/authorization lifecycle event families include `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, and capture pending/completed/denied events. PayPal requires webhook signature verification against the app's registered webhook configuration; an unverified payload must not drive payment state changes.
+- Consequently, Pause currently processes only its own authenticated payment-initiation flow and its verified PayPal API/callback lifecycle. It does not detect or claim to assess incoming payments initiated elsewhere in PayPal.
+- No trusted-contact email/SMS/push delivery is configured. The backend can validate a one-time trusted-contact token, but the project does not automatically deliver a link to the named contact.
+
+### Remaining submission work and limitations
+
+- Add a README with setup/run/test/API instructions, an MIT license if that is the intended license, and a sub-three-minute demo video.
+- Configure durable storage before treating notification/activity history as long-lived user data. H2 create-drop is suitable only for this demo.
+- The app has no password recovery, email verification, rate limiting, account deletion, or production deployment hardening; authentication is a hackathon foundation, not a production identity service.
+- No live PayPal payment should be inferred from automated test results; payment-flow tests mock `PayPalClient`. The frontend's visual states should be manually exercised without initiating unnecessary Sandbox payments.

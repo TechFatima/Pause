@@ -3,6 +3,7 @@ package com.pause.backend;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,9 +23,11 @@ import java.util.stream.Collectors;
 public class PaymentController {
 
     private final PaymentFlowService paymentFlowService;
+    private final UserIdentityService userIdentityService;
 
-    public PaymentController(PaymentFlowService paymentFlowService) {
+    public PaymentController(PaymentFlowService paymentFlowService, UserIdentityService userIdentityService) {
         this.paymentFlowService = paymentFlowService;
+        this.userIdentityService = userIdentityService;
     }
 
     /**
@@ -34,9 +37,13 @@ public class PaymentController {
      * Returns decision, message, reasons, paymentRecordId, and approveUrl (null for BLOCK).
      */
     @PostMapping("/initiate")
-    public ResponseEntity<?> initiate(@Valid @RequestBody CheckpointRequest request) {
+    public ResponseEntity<?> initiate(
+            @Valid @RequestBody CheckpointRequest request,
+            Authentication authentication
+    ) {
         try {
-            InitiatePaymentResponse response = paymentFlowService.initiate(request);
+            Long userId = userIdentityService.requireUser(authentication).getId();
+            InitiatePaymentResponse response = paymentFlowService.initiate(request, userId);
             return ResponseEntity.ok(response);
         } catch (PaymentFlowService.PaymentFlowException ex) {
             // PayPal returned an error — surface it as a 502 Bad Gateway.

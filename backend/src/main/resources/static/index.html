@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#fdfbf5">
+    <meta name="description" content="Pause checks a payment for suspicious signals before you continue to PayPal Sandbox.">
+    <title>Pause — Payment Safety Checkpoint</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/" aria-label="Pause home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+        <span class="brand-name">pause<span class="brand-period">.</span></span>
+    </a>
+    <div class="header-meta">
+        <span class="product-label">Payment safety checkpoint</span>
+        <span class="sandbox-badge"><span class="status-dot" aria-hidden="true"></span>PayPal Sandbox</span>
+        <div id="account-controls" class="account-controls" hidden>
+            <span id="account-name" class="account-name"></span>
+            <button id="logout-button" class="logout-button" type="button">Log out</button>
+        </div>
+    </div>
+</header>
+
+<section id="auth-screen" class="auth-screen" aria-labelledby="auth-title" hidden>
+    <div class="auth-card">
+        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>Your Pause account</p>
+        <h1 id="auth-title">A safer way<br>to send.</h1>
+        <p class="auth-intro">Sign in to see your payment activity and safety notifications.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Account access">
+            <button id="show-login" class="auth-tab active" type="button" role="tab" aria-selected="true">Sign in</button>
+            <button id="show-register" class="auth-tab" type="button" role="tab" aria-selected="false">Create account</button>
+        </div>
+        <form id="login-form" class="auth-form">
+            <div class="field-group">
+                <label for="login-email">Email</label>
+                <input id="login-email" name="email" type="email" autocomplete="email" required>
+            </div>
+            <div class="field-group">
+                <label for="login-password">Password</label>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+            </div>
+            <button class="primary-button" type="submit"><span>Sign in securely</span><span aria-hidden="true">→</span></button>
+        </form>
+        <form id="register-form" class="auth-form" hidden>
+            <div class="field-group">
+                <label for="register-name">Name</label>
+                <input id="register-name" name="name" type="text" autocomplete="name" maxlength="80" required>
+            </div>
+            <div class="field-group">
+                <label for="register-email">Email</label>
+                <input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+            </div>
+            <div class="field-group">
+                <label for="register-password">Password <span class="optional-label">12 characters or more</span></label>
+                <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required>
+            </div>
+            <button class="primary-button" type="submit"><span>Create account</span><span aria-hidden="true">→</span></button>
+        </form>
+        <p id="auth-error" class="auth-error" role="alert" hidden></p>
+        <p class="auth-footnote">Your account is protected with a hashed password and a private server session.</p>
+    </div>
+</section>
+
+<main id="app-shell" hidden>
+    <section class="dashboard" aria-labelledby="dashboard-title">
+        <div class="dashboard-heading">
+            <div>
+                <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>Your account</p>
+                <h2 id="dashboard-title">Welcome back, <span id="dashboard-name"></span>.</h2>
+                <p id="dashboard-email" class="dashboard-email"></p>
+            </div>
+            <span class="account-status"><span class="status-dot" aria-hidden="true"></span>Personal safety space</span>
+        </div>
+        <div class="dashboard-stats">
+            <article class="dashboard-stat"><span>Payments checked</span><strong id="payment-count">0</strong></article>
+            <article class="dashboard-stat"><span>Pending reviews</span><strong id="pending-count">0</strong></article>
+            <article class="dashboard-stat"><span>Unread notifications</span><strong id="unread-count">0</strong></article>
+            <article class="dashboard-stat limits-stat"><span>Your safety limits</span><strong id="limits-summary">Loading…</strong></article>
+        </div>
+        <div class="dashboard-panels">
+            <section class="dashboard-panel" aria-labelledby="activity-title">
+                <div class="panel-heading"><div><p class="panel-kicker">Your history</p><h3 id="activity-title">Payment activity</h3></div><span id="activity-subtitle" class="panel-meta">Only your payments</span></div>
+                <div id="activity-list" class="activity-list"><p class="dashboard-empty">Loading payment activity…</p></div>
+            </section>
+            <section class="dashboard-panel" aria-labelledby="notifications-title">
+                <div class="panel-heading"><div><p class="panel-kicker">From real app events</p><h3 id="notifications-title">Notifications</h3></div><span class="notification-mark" aria-hidden="true">✳</span></div>
+                <div id="notification-list" class="notification-list"><p class="dashboard-empty">Loading notifications…</p></div>
+            </section>
+        </div>
+    </section>
+
+    <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>A calmer way to pay</p>
+            <h1 id="hero-title">Before you send,<br><span>take a moment.</span></h1>
+            <p class="hero-description">Pause checks the payment, investigates suspicious signals and helps you recognize manipulation before money moves.</p>
+            <div class="hero-note">
+                <span class="note-icon" aria-hidden="true">Ⅱ</span>
+                <p>A little time can make pressure easier to see.</p>
+            </div>
+        </div>
+        <aside class="hero-card" aria-label="How Pause helps">
+            <div class="hero-card-top">
+                <span class="hero-card-kicker">A moment of clarity</span>
+                <span class="quiet-mark" aria-hidden="true">P</span>
+            </div>
+            <p class="hero-card-quote">“A real bank will never ask you to move money to a safe account.”</p>
+            <div class="hero-card-rule"></div>
+            <p class="hero-card-caption">Pause looks at the story around a payment, not just the amount.</p>
+        </aside>
+    </section>
+
+    <section class="workspace" aria-label="Payment safety check">
+        <div class="form-column">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow section-eyebrow">01 <span class="eyebrow-line" aria-hidden="true"></span>Payment details</p>
+                    <h2>What are you about to send?</h2>
+                </div>
+                <span class="step-count">Your check takes a moment</span>
+            </div>
+
+            <div class="preset-row" aria-label="Demo scenarios">
+                <span class="preset-label">Try a scenario</span>
+                <button class="preset-button" type="button" data-preset="safe">Safe</button>
+                <button class="preset-button" type="button" data-preset="suspicious">Suspicious</button>
+                <button class="preset-button" type="button" data-preset="injection">Prompt injection</button>
+            </div>
+            <p class="preset-hint">Scenarios only fill in the form. Each check uses the real Pause backend.</p>
+
+            <form id="payment-form" class="payment-form" novalidate>
+                <div class="field-group">
+                    <label for="payee">Who are you paying?<span class="required-mark">*</span></label>
+                    <input id="payee" name="payee" type="text" autocomplete="off" placeholder="Name of person or business" required aria-describedby="payee-error">
+                    <p class="field-error" id="payee-error" aria-live="polite"></p>
+                </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label for="amount">Amount<span class="required-mark">*</span></label>
+                        <div class="amount-input-wrap">
+                            <span class="currency-symbol" aria-hidden="true">$</span>
+                            <input id="amount" name="amount" type="number" min="0.01" step="any" inputmode="decimal" placeholder="0.00" required aria-describedby="amount-error">
+                        </div>
+                        <p class="field-error" id="amount-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field-group">
+                        <label for="hour">Payment hour <span class="optional-label">optional</span></label>
+                        <select id="hour" name="hour" aria-describedby="hour-hint">
+                            <option value="">Use current hour</option>
+                        </select>
+                        <p class="field-hint" id="hour-hint">Used to check unusual timing.</p>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label for="message">What did they tell you?<span class="optional-label">optional</span></label>
+                    <textarea id="message" name="message" rows="4" maxlength="2000" placeholder="Paste a text or describe the conversation that led to this payment."></textarea>
+                    <div class="textarea-footer"><span>Pause checks for urgency, fear, secrecy and suspicious links.</span><span id="message-count">0 / 2000</span></div>
+                </div>
+                <button id="submit-button" class="primary-button" type="submit">
+                    <span class="button-label">Check this payment</span>
+                    <span class="button-arrow" aria-hidden="true">→</span>
+                </button>
+                <p class="sandbox-disclaimer">PayPal Sandbox demonstration. This check does not move real money.</p>
+            </form>
+        </div>
+
+        <aside class="side-column" aria-label="About this safety check">
+            <div class="side-card pause-card">
+                <div class="side-card-icon" aria-hidden="true"><span></span><span></span></div>
+                <p class="side-card-label">The Pause principle</p>
+                <h3>Pressure wants you to act quickly.</h3>
+                <p>Take a breath. Check the story. Make the decision that feels right to you.</p>
+            </div>
+            <div class="side-card checklist-card">
+                <p class="side-card-label">A quick reminder</p>
+                <ul class="reminder-list">
+                    <li><span class="check-mark" aria-hidden="true">✓</span><span>Never move money to a “safe account.”</span></li>
+                    <li><span class="check-mark" aria-hidden="true">✓</span><span>Be wary of urgency and secrecy.</span></li>
+                    <li><span class="check-mark" aria-hidden="true">✓</span><span>Verify unexpected requests another way.</span></li>
+                </ul>
+            </div>
+            <p class="privacy-note"><span class="privacy-mark" aria-hidden="true">✳</span> Your payment details are sent to this demo’s backend for a live safety check.</p>
+        </aside>
+    </section>
+
+    <section id="result" class="result-section" aria-live="polite" aria-atomic="false" hidden>
+        <div class="result-heading-row">
+            <div>
+                <p class="eyebrow section-eyebrow">02 <span class="eyebrow-line" aria-hidden="true"></span>Checkpoint result</p>
+                <h2>Your payment check</h2>
+            </div>
+            <button id="new-check-button" class="text-button" type="button">Start another check <span aria-hidden="true">↗</span></button>
+        </div>
+        <div id="result-card" class="result-card">
+            <div class="result-main">
+                <div class="decision-topline">
+                    <span id="decision-icon" class="decision-icon" aria-hidden="true"></span>
+                    <span id="decision-label" class="decision-label"></span>
+                </div>
+                <h3 id="result-title" class="result-title"></h3>
+                <p id="result-message" class="result-message"></p>
+                <p id="result-guidance" class="result-guidance" hidden></p>
+                <div id="approval-area" class="approval-area" hidden></div>
+            </div>
+            <div class="result-details">
+                <div id="record-reference" class="record-reference" hidden></div>
+                <div id="reasons-section" class="detail-section" hidden>
+                    <h4>Why Pause raised a flag</h4>
+                    <ul id="reasons-list" class="reason-list"></ul>
+                </div>
+                <div id="signals-section" class="detail-section" hidden>
+                    <h4>Rule signals</h4>
+                    <ul id="signals-list" class="plain-list"></ul>
+                </div>
+                <div id="findings-section" class="detail-section" hidden>
+                    <h4>Investigation findings</h4>
+                    <div id="findings-list" class="finding-list"></div>
+                </div>
+                <div id="score-section" class="detail-section score-row" hidden></div>
+                <div id="ai-section" class="ai-section" hidden>
+                    <div class="ai-heading"><span class="ai-spark" aria-hidden="true">✳</span><span id="ai-status"></span></div>
+                    <p id="ai-explanation" class="ai-explanation" hidden></p>
+                    <div id="tactics-wrap" hidden><h4>Signals in the message</h4><ul id="tactics-list" class="tag-list"></ul></div>
+                    <div id="questions-wrap" hidden><h4>Questions to consider</h4><ul id="questions-list" class="plain-list"></ul></div>
+                    <p class="ai-advisory">AI analysis is advisory. Pause’s rules and final decision remain authoritative.</p>
+                </div>
+                <p id="no-details-note" class="no-details-note" hidden></p>
+            </div>
+        </div>
+    </section>
+
+    <div id="error-banner" class="error-banner" role="alert" hidden>
+        <span class="error-mark" aria-hidden="true">!</span>
+        <div><strong id="error-title">We couldn’t complete the check.</strong><p id="error-message"></p></div>
+        <button id="dismiss-error" class="dismiss-button" type="button" aria-label="Dismiss error">×</button>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <span>PAUSE <span class="footer-dot">·</span> Payment Safety Checkpoint</span>
+    <span>Before you send, take a moment.</span>
+</footer>
+</body>
+</html>
