@@ -14,6 +14,10 @@ public class CheckpointResult {
     private final List<ToolFinding> toolFindings;    // from InvestigationService
     private final List<String>      reasons;         // merged plain-language reasons
     private final String            message;         // personalized summary
+    private List<String>            tactics = List.of();
+    private String                  explanation;
+    private List<String>            questions = List.of();
+    private boolean                 aiUsed;
 
     public CheckpointResult(
             Long              paymentRecordId,
@@ -31,6 +35,7 @@ public class CheckpointResult {
         this.toolFindings    = toolFindings;
         this.reasons         = reasons;
         this.message         = message;
+        this.explanation     = message;
     }
 
     public Long              getPaymentRecordId() { return paymentRecordId; }
@@ -40,4 +45,17 @@ public class CheckpointResult {
     public List<ToolFinding> getToolFindings()    { return toolFindings; }
     public List<String>      getReasons()         { return reasons; }
     public String            getMessage()         { return message; }
+    public List<String>      getTactics()         { return tactics; }
+    public String            getExplanation()     { return explanation; }
+    public List<String>      getQuestions()       { return questions; }
+    public boolean           isAiUsed()           { return aiUsed; }
+
+    void setAnalystResult(MikasaAnalysis analysis) {
+        if (analysis.isAvailable()) {
+            tactics = analysis.getTactics();
+            explanation = analysis.getExplanation();
+            questions = analysis.getQuestions();
+            aiUsed = true;
+        }
+    }
 }

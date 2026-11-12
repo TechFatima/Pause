@@ -25,15 +25,18 @@ public class CheckpointService {
     private final RuleEngine              ruleEngine;
     private final InvestigationService    investigationService;
     private final PaymentRecordRepository paymentRepo;
+    private final MikasaAnalyst           mikasaAnalyst;
 
     public CheckpointService(
             RuleEngine              ruleEngine,
             InvestigationService    investigationService,
-            PaymentRecordRepository paymentRepo
+            PaymentRecordRepository paymentRepo,
+            MikasaAnalyst           mikasaAnalyst
     ) {
         this.ruleEngine           = ruleEngine;
         this.investigationService = investigationService;
         this.paymentRepo          = paymentRepo;
+        this.mikasaAnalyst        = mikasaAnalyst;
     }
 
     /**
@@ -86,6 +89,12 @@ public class CheckpointService {
             decision = raise(decision, Decision.HOLD);
         }
 
+        // The analyst can raise this decision, but can never make it less strict.
+        MikasaAnalysis analystResult = mikasaAnalyst.analyze(req, ruleResult, toolResult);
+        if (analystResult.isAvailable()) {
+            decision = raise(decision, analystResult.getSuggestedDecision());
+        }
+
         // --- 8. Merge reasons from both sources ---
         List<String> reasons = new ArrayList<>();
         for (RiskSignal signal : ruleResult.getSignals()) {
@@ -124,7 +133,7 @@ public class CheckpointService {
         record.setSummary(summary);
         record = paymentRepo.save(record);
 
-        return new CheckpointResult(
+        CheckpointResult result = new CheckpointResult(
                 record.getId(),
                 combinedScore,
                 decision,
@@ -133,6 +142,8 @@ public class CheckpointService {
                 reasons,
                 message
         );
+        result.setAnalystResult(analystResult);
+        return result;
     }
 
     // -----------------------------------------------------------------------
